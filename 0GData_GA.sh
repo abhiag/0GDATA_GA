@@ -38,6 +38,13 @@ else
     BLS_PRIVATE_KEY=$(cat bls_key.txt | grep -oP '(?<=Private key: ).*')
 fi
 
+# Extract the BLS key
+BLS_KEY=$(cat ~/0g-da-node/bls_key.txt | tr -d '\n')
+
+# Insert BLS Key into config.toml
+sed -i "s|signer_bls_private_key = \"\"|signer_bls_private_key = \"$BLS_KEY\"|g" ~/0g-da-node/config.toml
+echo "✅ BLS Key successfully added to config.toml!"
+
 # Prompt user for Ethereum private keys
 read -p "🔑 Enter your Ethereum Signer Private Key: " SIGNER_ETH_KEY
 read -p "🔑 Enter your Ethereum Miner Private Key: " MINER_ETH_KEY
