@@ -80,23 +80,30 @@ else
     cd "$HOME/0g-da-node"
 fi
 
-# Generate BLS private key (if needed)
-if [ ! -f "$HOME/0g-da-node/bls_key.txt" ]; then
+# Generate or extract BLS private key
+BLS_KEY_FILE="$HOME/0g-da-node/bls_key.txt"
+
+if [ ! -f "$BLS_KEY_FILE" ] || [ ! -s "$BLS_KEY_FILE" ]; then
     echo -e "${GREEN}🔑 Generating BLS Private Key...${RESET}"
-    cargo run --bin key-gen > "$HOME/0g-da-node/bls_key.txt" 2>/dev/null
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ Failed to generate BLS Private Key. Exiting.${RESET}"
+    cargo run --bin key-gen > "$BLS_KEY_FILE" 2>/dev/null
+fi
+
+# Extract the BLS Private Key from bls_key.txt
+BLS_PRIVATE_KEY=$(grep -oP '^\d+$' "$BLS_KEY_FILE" | head -n 1)
+
+# Validate extracted key
+if [ -z "$BLS_PRIVATE_KEY" ]; then
+    echo -e "${RED}❌ Failed to extract BLS Private Key. Retrying key generation...${RESET}"
+    cargo run --bin key-gen > "$BLS_KEY_FILE" 2>/dev/null
+    BLS_PRIVATE_KEY=$(grep -oP '^\d+$' "$BLS_KEY_FILE" | head -n 1)
+    
+    if [ -z "$BLS_PRIVATE_KEY" ]; then
+        echo -e "${RED}❌ Key generation failed. Please check manually.${RESET}"
         exit 1
     fi
 fi
 
-# Extract BLS Private Key
-BLS_PRIVATE_KEY=$(cat "$HOME/0g-da-node/bls_key.txt" | grep -oP '(?<=Private key: ).*')
-if [ -z "$BLS_PRIVATE_KEY" ]; then
-    echo -e "${RED}❌ Failed to extract BLS Private Key. Exiting.${RESET}"
-    exit 1
-fi
-echo -e "${GREEN}✅ BLS Private Key extracted.${RESET}"
+echo -e "${GREEN}✅ BLS Private Key extracted successfully.${RESET}"
 
 # Prompt user for Ethereum private keys
 read -p "🔑 Enter your Ethereum Signer Private Key: " SIGNER_ETH_KEY
