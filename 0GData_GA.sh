@@ -70,30 +70,33 @@ else
     echo -e "${GREEN}✅ Rust is already installed.${RESET}"
 fi
 
-# Clone 0G DA Node repository
-echo -e "${GREEN}🔽 Cloning 0G DA Node repository...${RESET}"
-git clone https://github.com/0glabs/0g-da-node.git ~/0g-da-node || cd ~/0g-da-node && git pull
-cd ~/0g-da-node
-
-# Stop & Remove Existing Container (if any)
-if docker ps -a --format '{{.Names}}' | grep -q "0g-da-node"; then
-    echo -e "${GREEN}🛑 Stopping existing 0G DA Node container...${RESET}"
-    docker stop 0g-da-node && docker rm 0g-da-node
+# Clone or update 0G DA Node repository
+if [ -d "$HOME/0g-da-node" ]; then
+    echo -e "${GREEN}🔄 Repository already exists. Pulling latest changes...${RESET}"
+    cd "$HOME/0g-da-node" && git pull
+else
+    echo -e "${GREEN}🔽 Cloning 0G DA Node repository...${RESET}"
+    git clone https://github.com/0glabs/0g-da-node.git "$HOME/0g-da-node"
+    cd "$HOME/0g-da-node"
 fi
 
 # Generate BLS private key (if needed)
-if [ ! -f bls_key.txt ]; then
+if [ ! -f "$HOME/0g-da-node/bls_key.txt" ]; then
     echo -e "${GREEN}🔑 Generating BLS Private Key...${RESET}"
-    cargo run --bin key-gen > bls_key.txt
+    cargo run --bin key-gen > "$HOME/0g-da-node/bls_key.txt" 2>/dev/null
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to generate BLS Private Key. Exiting.${RESET}"
+        exit 1
+    fi
 fi
-BLS_PRIVATE_KEY=$(grep -oP '(?<=Private key: ).*' bls_key.txt | tr -d '\n')
 
+# Extract BLS Private Key
+BLS_PRIVATE_KEY=$(cat "$HOME/0g-da-node/bls_key.txt" | grep -oP '(?<=Private key: ).*')
 if [ -z "$BLS_PRIVATE_KEY" ]; then
-    echo -e "${GREEN}❌ Failed to generate BLS Private Key. Exiting.${RESET}"
+    echo -e "${RED}❌ Failed to extract BLS Private Key. Exiting.${RESET}"
     exit 1
 fi
-
-echo -e "${GREEN}✅ BLS Private Key: $BLS_PRIVATE_KEY ${RESET}"
+echo -e "${GREEN}✅ BLS Private Key extracted.${RESET}"
 
 # Prompt user for Ethereum private keys
 read -p "🔑 Enter your Ethereum Signer Private Key: " SIGNER_ETH_KEY
@@ -101,7 +104,7 @@ read -p "🔑 Enter your Ethereum Miner Private Key: " MINER_ETH_KEY
 
 # Create config.toml file
 echo -e "${GREEN}📝 Creating config.toml file...${RESET}"
-cat <<EOF > config.toml
+cat <<EOF > "$HOME/0g-da-node/config.toml"
 log_level = "info"
 data_path = "/data"
 
@@ -126,23 +129,31 @@ signer_bls_private_key = "$BLS_PRIVATE_KEY"
 signer_eth_private_key = "$SIGNER_ETH_KEY"
 miner_eth_private_key = "$MINER_ETH_KEY"
 
-# Prometheus exporter address (Fixing missing key issue)
-prometheus_exporter_address = "0.0.0.0:9000"
-
 # Enable data availability sampling
 enable_das = "true"
-EOF
 
+# Prometheus metrics exporter
+prometheus_exporter_address = "0.0.0.0:9000"
+EOF
 echo -e "${GREEN}✅ Configuration file created.${RESET}"
+
+# Stop and remove existing Docker container if running
+if docker ps -a --format '{{.Names}}' | grep -q "0g-da-node"; then
+    echo -e "${GREEN}🛑 Stopping and removing existing Docker container...${RESET}"
+    docker stop 0g-da-node && docker rm 0g-da-node
+fi
 
 # Build and start the Docker container
 echo -e "${GREEN}🐳 Building and running the Docker container...${RESET}"
-docker build -t 0g-da-node . && docker run -d --name 0g-da-node 0g-da-node
-
+cd "$HOME/0g-da-node"
+docker build -t 0g-da-node .
 if [ $? -ne 0 ]; then
-    echo -e "${GREEN}❌ Docker failed to build or run. Check logs for details.${RESET}"
+    echo -e "${RED}❌ Docker build failed. Exiting.${RESET}"
     exit 1
 fi
 
+docker run -d --name 0g-da-node 0g-da-node
+
+# Display success message
 echo -e "${GREEN}🎉 0G DA Node setup complete!${RESET}"
 echo -e "👉 Use 'docker logs -f 0g-da-node' to monitor logs."
