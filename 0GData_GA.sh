@@ -1,59 +1,3 @@
-#!/bin/bash
-
-printf "\n"
-cat <<EOF
-🚀 0G DA Node Setup Script 🚀
-
-░██████╗░░█████╗░  ░█████╗░██████╗░██╗░░░██╗██████╗░████████╗░█████╗░
-██╔════╝░██╔══██╗  ██╔══██╗██╔══██╗╚██╗░██╔╝██╔══██╗╚══██╔══╝██╔══██╗
-██║░░██╗░███████║  ██║░░╚═╝██████╔╝░╚████╔╝░██████╔╝░░░██║░░░██║░░██║
-██║░░╚██╗██╔══██║  ██║░░██╗██╔══██╗░░╚██╔╝░░██╔═══╝░░░░██║░░░██║░░██║
-╚██████╔╝██║░░██║  ╚█████╔╝██║░░██║░░░██║░░░██║░░░░░░░░██║░░░╚█████╔╝
-░╚═════╝░╚═╝░░╚═╝  ░╚════╝░╚═╝░░╚═╝░░░╚═╝░░░╚═╝░░░░░░░░╚═╝░░░░╚════╝░
-
-EOF
-
-printf "\n\n"
-
-##########################################################################################
-#                                                                                        
-#                🚀 THIS SCRIPT IS PROUDLY CREATED BY **GA CRYPTO**! 🚀                  
-#                                                                                        
-#   🌐 Join our revolution in decentralized networks and crypto innovation!               
-#                                                                                        
-# 📢 Stay updated:                                                                      
-#     • Follow us on Telegram: https://t.me/GaCryptOfficial                             
-#     • Follow us on X: https://x.com/GACryptoO                                         
-##########################################################################################
-
-# Define colors
-GREEN="\033[0;32m"
-RESET="\033[0m"
-
-# Print welcome message
-printf "${GREEN}"
-printf "🚀 Setting up 0G DA Node...\n"
-printf "${RESET}"
-
-# Ensure script is running as root
-if [ "$EUID" -ne 0 ]; then
-    echo "❌ Please run this script as root!"
-    exit 1
-fi
-
-# Stop and remove existing container if running
-echo "🛑 Stopping any existing 0G DA Node container..."
-docker stop 0g-da-node 2>/dev/null
-docker rm 0g-da-node 2>/dev/null
-
-#!/bin/bash
-
-# Define colors for output
-GREEN="\033[0;32m"
-RESET="\033[0m"
-
-echo -e "${GREEN}🚀 Starting 0G DA Node Setup...${RESET}"
-
 # Update system and install required dependencies
 echo -e "${GREEN}🔄 Updating system packages...${RESET}"
 sudo apt update -y && sudo apt upgrade -y
@@ -73,40 +17,49 @@ fi
 # Clone or update 0G DA Node repository
 if [ -d "$HOME/0g-da-node" ]; then
     echo -e "${GREEN}🔄 Repository already exists. Pulling latest changes...${RESET}"
-    cd "$HOME/0g-da-node" && git pull
+    cd "$HOME/0g-da-node"
+    git pull origin main || { echo -e "${RED}❌ Failed to update repository. Exiting.${RESET}"; exit 1; }
 else
     echo -e "${GREEN}🔽 Cloning 0G DA Node repository...${RESET}"
     git clone https://github.com/0glabs/0g-da-node.git "$HOME/0g-da-node"
     cd "$HOME/0g-da-node"
 fi
 
-# Generate BLS Key if it doesn't exist
-if [ ! -f bls_key.txt ]; then
-    echo "🔑 Generating BLS key..."
-    cargo run --bin key-gen > bls_key.txt
+# Generate BLS private key (if not already generated)
+if [ ! -f "bls_key.txt" ]; then
+    echo -e "${GREEN}🔑 Generating BLS Private Key...${RESET}"
+    cargo run --bin key-gen > bls_key.txt 2>/dev/null
+    sleep 2  # Give it a moment to write the file
 fi
 
-# Extract the BLS key
-BLS_KEY=$(cat ~/0g-da-node/bls_key.txt | tr -d '\n')
-
-# Insert BLS Key into config.toml
-sed -i "s|signer_bls_private_key = \"\"|signer_bls_private_key = \"$BLS_KEY\"|g" ~/0g-da-node/config.toml
-
-echo "✅ BLS Key successfully added to config.toml!"
-
-# Prompt user for Ethereum private keys
-read -p "🔑 Enter your Ethereum Signer Private Key: " SIGNER_ETH_KEY
-read -p "🔑 Enter your Ethereum Miner Private Key (Press Enter to use the same as Signer): " MINER_ETH_KEY
-
-# If user presses Enter, use the same key for Miner
-if [ -z "$MINER_ETH_KEY" ]; then
-    MINER_ETH_KEY="$SIGNER_ETH_KEY"
-    echo -e "${GREEN}ℹ️ Using the same key for both Signer & Miner.${RESET}"
+# Check if BLS key file exists
+if [ ! -f "bls_key.txt" ]; then
+    echo -e "${RED}❌ Failed to generate BLS Private Key. Exiting.${RESET}"
+    exit 1
 fi
+
+# Extract BLS Private Key
+BLS_PRIVATE_KEY=$(cat bls_key.txt | tr -d '\n')
+
+if [[ -z "$BLS_PRIVATE_KEY" ]]; then
+    echo -e "${RED}❌ BLS Private Key extraction failed. Exiting.${RESET}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ BLS Private Key successfully extracted: $BLS_PRIVATE_KEY${RESET}"
+
+# Prompt user for Ethereum Private Key (used for both Signer & Miner)
+read -p "🔑 Enter your Ethereum Private Key (used for both Signer & Miner): " ETH_PRIVATE_KEY
+
+# Use the same key for both signer and miner
+SIGNER_ETH_KEY="$ETH_PRIVATE_KEY"
+MINER_ETH_KEY="$ETH_PRIVATE_KEY"
+
+echo -e "${GREEN}✅ Using the same key for both Signer & Miner.${RESET}"
 
 # Create config.toml file
 echo -e "${GREEN}📝 Creating config.toml file...${RESET}"
-cat <<EOF > "$HOME/0g-da-node/config.toml"
+cat <<EOF > config.toml
 log_level = "info"
 data_path = "/data"
 
@@ -134,26 +87,34 @@ miner_eth_private_key = "$MINER_ETH_KEY"
 # Enable data availability sampling
 enable_das = "true"
 
-# Prometheus metrics exporter
-prometheus_exporter_address = "0.0.0.0:9000"
+# Prometheus exporter address
+prometheus_exporter_address = "0.0.0.0:9200"
 EOF
+
 echo -e "${GREEN}✅ Configuration file created.${RESET}"
 
-# Stop and remove existing Docker container if running
+# Read and insert BLS key into config.toml
+BLS_PRIVATE_KEY=$(cat bls_key.txt | tr -d '\n')
+sed -i "s|signer_bls_private_key = \"\"|signer_bls_private_key = \"$BLS_PRIVATE_KEY\"|g" config.toml
+echo "✅ BLS Key successfully added to config.toml!"
+
+# **Verify that BLS key is correctly inserted**
+if grep -q "signer_bls_private_key = \"$BLS_PRIVATE_KEY\"" config.toml; then
+    echo -e "${GREEN}✅ BLS Private Key successfully written to config.toml.${RESET}"
+else
+    echo -e "${RED}❌ BLS Private Key insertion failed! Exiting.${RESET}"
+    exit 1
+fi
+
+# Stop and remove existing container (if running)
 if docker ps -a --format '{{.Names}}' | grep -q "0g-da-node"; then
-    echo -e "${GREEN}🛑 Stopping and removing existing Docker container...${RESET}"
+    echo -e "${GREEN}🛑 Stopping and removing existing container...${RESET}"
     docker stop 0g-da-node && docker rm 0g-da-node
 fi
 
 # Build and start the Docker container
 echo -e "${GREEN}🐳 Building and running the Docker container...${RESET}"
-cd "$HOME/0g-da-node"
 docker build -t 0g-da-node .
-if [ $? -ne 0 ]; then
-    echo -e "${RED}❌ Docker build failed. Exiting.${RESET}"
-    exit 1
-fi
-
 docker run -d --name 0g-da-node 0g-da-node
 
 # Display success message
