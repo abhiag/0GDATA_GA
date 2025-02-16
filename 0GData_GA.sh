@@ -80,30 +80,16 @@ else
     cd "$HOME/0g-da-node"
 fi
 
-# Generate or extract BLS private key
-BLS_KEY_FILE="$HOME/0g-da-node/bls_key.txt"
-
-if [ ! -f "$BLS_KEY_FILE" ] || [ ! -s "$BLS_KEY_FILE" ]; then
-    echo -e "${GREEN}🔑 Generating BLS Private Key...${RESET}"
-    cargo run --bin key-gen > "$BLS_KEY_FILE" 2>/dev/null
+# Generate BLS Key if it doesn't exist
+if [ ! -f bls_key.txt ]; then
+    echo "🔑 Generating BLS key..."
+    cargo run --bin key-gen > bls_key.txt
 fi
 
-# Extract the BLS Private Key from bls_key.txt
-BLS_PRIVATE_KEY=$(grep -oP '^\d+$' "$BLS_KEY_FILE" | head -n 1)
-
-# Validate extracted key
-if [ -z "$BLS_PRIVATE_KEY" ]; then
-    echo -e "${RED}❌ Failed to extract BLS Private Key. Retrying key generation...${RESET}"
-    cargo run --bin key-gen > "$BLS_KEY_FILE" 2>/dev/null
-    BLS_PRIVATE_KEY=$(grep -oP '^\d+$' "$BLS_KEY_FILE" | head -n 1)
-    
-    if [ -z "$BLS_PRIVATE_KEY" ]; then
-        echo -e "${RED}❌ Key generation failed. Please check manually.${RESET}"
-        exit 1
-    fi
-fi
-
-echo -e "${GREEN}✅ BLS Private Key extracted successfully.${RESET}"
+# Read and insert BLS key into config.toml
+BLS_KEY=$(cat bls_key.txt | tr -d '\n')
+sed -i "s|signer_bls_private_key = \"\"|signer_bls_private_key = \"$BLS_KEY\"|g" config.toml
+echo "✅ BLS Key successfully added to config.toml!"
 
 # Prompt user for Ethereum private keys
 read -p "🔑 Enter your Ethereum Signer Private Key: " SIGNER_ETH_KEY
