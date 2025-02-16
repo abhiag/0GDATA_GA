@@ -86,9 +86,12 @@ if [ ! -f bls_key.txt ]; then
     cargo run --bin key-gen > bls_key.txt
 fi
 
-# Read and insert BLS key into config.toml
-BLS_KEY=$(cat bls_key.txt | tr -d '\n')
-sed -i "s|signer_bls_private_key = \"\"|signer_bls_private_key = \"$BLS_KEY\"|g" config.toml
+# Extract the BLS key
+BLS_KEY=$(cat ~/0g-da-node/bls_key.txt | tr -d '\n')
+
+# Insert BLS Key into config.toml
+sed -i "s|signer_bls_private_key = \"\"|signer_bls_private_key = \"$BLS_KEY\"|g" ~/0g-da-node/config.toml
+
 echo "✅ BLS Key successfully added to config.toml!"
 
 # Prompt user for Ethereum private keys
