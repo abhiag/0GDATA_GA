@@ -1,91 +1,85 @@
 #!/bin/bash
 
-# Define colors for output
+printf "\n"
+cat <<EOF
+🚀 0G DA Node Setup Script 🚀
+
+░██████╗░░█████╗░  ░█████╗░██████╗░██╗░░░██╗██████╗░████████╗░█████╗░
+██╔════╝░██╔══██╗  ██╔══██╗██╔══██╗╚██╗░██╔╝██╔══██╗╚══██╔══╝██╔══██╗
+██║░░██╗░███████║  ██║░░╚═╝██████╔╝░╚████╔╝░██████╔╝░░░██║░░░██║░░██║
+██║░░╚██╗██╔══██║  ██║░░██╗██╔══██╗░░╚██╔╝░░██╔═══╝░░░░██║░░░██║░░██║
+╚██████╔╝██║░░██║  ╚█████╔╝██║░░██║░░░██║░░░██║░░░░░░░░██║░░░╚█████╔╝
+░╚═════╝░╚═╝░░╚═╝  ░╚════╝░╚═╝░░╚═╝░░░╚═╝░░░╚═╝░░░░░░░░╚═╝░░░░╚════╝░
+
+EOF
+
+printf "\n\n"
+
+##########################################################################################
+#                                                                                        
+#                🚀 THIS SCRIPT IS PROUDLY CREATED BY **GA CRYPTO**! 🚀                  
+#                                                                                        
+#   🌐 Join our revolution in decentralized networks and crypto innovation!               
+#                                                                                        
+# 📢 Stay updated:                                                                      
+#     • Follow us on Telegram: https://t.me/GaCryptOfficial                             
+#     • Follow us on X: https://x.com/GACryptoO                                         
+##########################################################################################
+
+# Define colors
 GREEN="\033[0;32m"
 RESET="\033[0m"
 
-echo -e "${GREEN}🚀 Starting 0G DA Node Setup...${RESET}"
+# Print welcome message
+printf "${GREEN}"
+printf "🚀 Setting up 0G DA Node...\n"
+printf "${RESET}"
 
-# Update system and install required dependencies
-echo -e "${GREEN}🔄 Updating system packages...${RESET}"
-sudo apt update -y && sudo apt upgrade -y
-
-echo -e "${GREEN}⚙️ Installing dependencies...${RESET}"
-sudo apt install -y git curl wget docker.io docker-compose build-essential
-
-# Install Rust (if not installed)
-if ! command -v cargo &> /dev/null; then
-    echo -e "${GREEN}📦 Installing Rust...${RESET}"
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    source "$HOME/.cargo/env"
-else
-    echo -e "${GREEN}✅ Rust is already installed.${RESET}"
+# Ensure script is running as root
+if [ "$EUID" -ne 0 ]; then
+    echo "❌ Please run this script as root!"
+    exit 1
 fi
 
-# Clone 0G DA Node repository
-echo -e "${GREEN}🔽 Cloning 0G DA Node repository...${RESET}"
-git clone https://github.com/0glabs/0g-da-node.git ~/0g-da-node
-cd ~/0g-da-node
+# Stop and remove existing container if running
+echo "🛑 Stopping any existing 0G DA Node container..."
+docker stop 0g-da-node 2>/dev/null
+docker rm 0g-da-node 2>/dev/null
 
-# Generate BLS private key (if needed)
+# Navigate to 0G DA Node directory
+echo "📂 Changing to the 0G DA Node directory..."
+cd ~/0g-da-node || { echo "❌ Error: ~/0g-da-node directory not found!"; exit 1; }
+
+# Check if Dockerfile exists
+if [ ! -f Dockerfile ]; then
+    echo "❌ Error: Dockerfile not found in ~/0g-da-node!"
+    exit 1
+fi
+
+# Generate BLS Key if it doesn't exist
 if [ ! -f bls_key.txt ]; then
-    echo -e "${GREEN}🔑 Generating BLS Private Key...${RESET}"
+    echo "🔑 Generating BLS key..."
     cargo run --bin key-gen > bls_key.txt
-    BLS_PRIVATE_KEY=$(cat bls_key.txt | grep -oP '(?<=Private key: ).*')
-    echo -e "${GREEN}✅ BLS Private Key generated and saved.${RESET}"
-else
-    echo -e "${GREEN}🔑 Existing BLS Private Key found.${RESET}"
-    BLS_PRIVATE_KEY=$(cat bls_key.txt | grep -oP '(?<=Private key: ).*')
 fi
 
-# Extract the BLS key
-BLS_KEY=$(cat ~/0g-da-node/bls_key.txt | tr -d '\n')
-
-# Insert BLS Key into config.toml
-sed -i "s|signer_bls_private_key = \"\"|signer_bls_private_key = \"$BLS_KEY\"|g" ~/0g-da-node/config.toml
+# Read and insert BLS key into config.toml
+BLS_KEY=$(cat bls_key.txt | tr -d '\n')
+sed -i "s|signer_bls_private_key = \"\"|signer_bls_private_key = \"$BLS_KEY\"|g" config.toml
 echo "✅ BLS Key successfully added to config.toml!"
 
-# Prompt user for Ethereum private keys
-read -p "🔑 Enter your Ethereum Signer Private Key: " SIGNER_ETH_KEY
-read -p "🔑 Enter your Ethereum Miner Private Key: " MINER_ETH_KEY
+# Install dependencies if missing
+echo "🔄 Checking and installing dependencies..."
+sudo apt update -y
+sudo apt install -y curl wget jq unzip screen docker.io
 
-# Create config.toml file
-echo -e "${GREEN}📝 Creating config.toml file...${RESET}"
-cat <<EOF > config.toml
-log_level = "info"
-data_path = "/data"
+# Build the Docker image
+echo "🔨 Building Docker image..."
+docker build -t 0g-da-node . || { echo "❌ Error: Docker build failed!"; exit 1; }
 
-# Path to downloaded params folder
-encoder_params_dir = "/params"
-
-# gRPC server listen address
-grpc_listen_address = "0.0.0.0:34000"
-
-# Chain eth rpc endpoint
-eth_rpc_endpoint = "https://evmrpc-testnet.0g.ai"
-
-# Public gRPC service socket address to register in DA contract
-socket_address = "<your_public_ip>:34000"
-
-# Data Availability contract info
-da_entrance_address = "0x857C0A28A8634614BB2C96039Cf4a20AFF709Aa9"
-start_block_number = 940000
-
-# Private keys
-signer_bls_private_key = "$BLS_PRIVATE_KEY"
-signer_eth_private_key = "$SIGNER_ETH_KEY"
-miner_eth_private_key = "$MINER_ETH_KEY"
-
-# Enable data availability sampling
-enable_das = "true"
-EOF
-echo -e "${GREEN}✅ Configuration file created.${RESET}"
-
-# Build and start the Docker container
-echo -e "${GREEN}🐳 Building and running the Docker container...${RESET}"
-docker build -t 0g-da-node .
+# Run the Docker container
+echo "🚀 Starting 0G DA Node..."
 docker run -d --name 0g-da-node 0g-da-node
 
-# Display success message
-echo -e "${GREEN}🎉 0G DA Node setup complete!${RESET}"
-echo -e "👉 Use 'docker logs -f 0g-da-node' to monitor logs."
+# Verify the Node is Running
+echo "🔍 Verifying the node status..."
+docker logs -f 0g-da-node
