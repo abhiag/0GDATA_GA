@@ -178,6 +178,7 @@ while true; do
     echo "5. Check Node Status"
     echo "6. Setup Validator"
     echo "7. Exit"
+    echo "6. Update Peers"
     echo "================================================="
     read -p "Enter your choice: " CHOICE
 
@@ -188,6 +189,7 @@ while true; do
         4) uninstall_node ;;
         5) check_status ;;
         6) setup_validator ;;
+        8) update_peers ;;
         7) break ;;
         *) echo -e "\e[1m\e[31mInvalid choice. Please try again.\e[0m" ;;
     esac
