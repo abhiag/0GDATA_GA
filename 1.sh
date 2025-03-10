@@ -153,7 +153,7 @@ uninstall_node() {
 # Function to check node status
 check_status() {
     echo -e "\e[1m\e[32mChecking node status...\e[0m"
-    sudo systemctl status 0gd
+    sudo systemctl status 0gd --no-pager
 }
 
 # Function to setup validator
