@@ -54,17 +54,17 @@ install_node() {
     rm $HOME/.0gchain/config/genesis.json
     wget https://github.com/0glabs/0g-chain/releases/download/v0.2.3/genesis.json -O $HOME/.0gchain/config/genesis.json
 
-    echo -e "\e[1m\e[32m7. Configuring seeds and peers... \e[0m" && sleep 1
+    echo -e "\e[1m\e[32m7. Configuring seeds... \e[0m" && sleep 1
     SEEDS="81987895a11f6689ada254c6b57932ab7ed909b6@54.241.167.190:26656,010fb4de28667725a4fef26cdc7f9452cc34b16d@54.176.175.48:26656,e9b4bc203197b62cc7e6a80a64742e752f4210d5@54.193.250.204:26656,68b9145889e7576b652ca68d985826abd46ad660@18.166.164.232:26656"
     sed -i.bak -e "s/^seeds *=.*/seeds = \"${SEEDS}\"/" $HOME/.0gchain/config/config.toml
 
-    PEERS="6dbb0450703d156d75db57dd3e51dc260a699221@152.53.47.155:13456,1bf93ac820773970cf4f46a479ab8b8206de5f60@62.171.185.81:12656,df4cc52fa0fcdd5db541a28e4b5a9c6ce1076ade@37.60.246.110:13456,66d59739b6b4ff0658e63832a5bbeb29e5259742@144.76.79.209:26656,76cc5b9beaff9f33dc2a235e80fe2d47448463a7@95.216.114.170:26656,adc616f440155f4e5c2bf748e9ac3c9e24bf78ac@51.161.13.62:26656,cd662c11f7b4879b3861a419a06041c782f1a32d@89.116.24.249:26656,40cf5c7c11931a4fdab2b721155cc236dfe7a809@84.46.255.133:12656,11945ced69c3448adeeba49355703984fcbc3a1a@37.27.130.146:26656,c02bf872d61f5dd04e877105ded1bd03243516fb@65.109.25.252:12656,d5e294d6d5439f5bd63d1422423d7798492e70fd@77.237.232.146:26656,386c82b09e0ec6a68e653a5d6c57f766ae73e0df@194.163.183.208:26656,4eac33906b2ba13ab37d0e2fe8fc5801e75f25a0@154.38.168.168:13456,c96b65a5b02081e3111b8b38cd7f5df76c7f9404@185.182.185.160:26656,48e3cab55ba7a1bc8ea940586e4718a857de84c4@178.63.4.186:26656"
-    sed -i "s/^persistent_peers *=.*/persistent_peers = \"$PEERS\"/" $HOME/.0gchain/config/config.toml
+    echo -e "\e[1m\e[32m8. Updating persistent peers dynamically... \e[0m" && sleep 1
+    update_peers
 
-    echo -e "\e[1m\e[32m8. Setting minimum gas price... \e[0m" && sleep 1
+    echo -e "\e[1m\e[32m9. Setting minimum gas price... \e[0m" && sleep 1
     sed -i "s/^minimum-gas-prices *=.*/minimum-gas-prices = \"0ua0gi\"/" $HOME/.0gchain/config/app.toml
 
-    echo -e "\e[1m\e[32m9. Creating service... \e[0m" && sleep 1
+    echo -e "\e[1m\e[32m10. Creating service... \e[0m" && sleep 1
     sudo tee /etc/systemd/system/0gd.service > /dev/null <<EOF
 [Unit]
 Description=0G Node
@@ -81,12 +81,32 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
 
-    echo -e "\e[1m\e[32m10. Starting service... \e[0m" && sleep 1
+    echo -e "\e[1m\e[32m11. Starting service... \e[0m" && sleep 1
     sudo systemctl daemon-reload
     sudo systemctl enable 0gd
     sudo systemctl start 0gd
 
     echo -e "\e[1m\e[32mNode installation completed!\e[0m"
+}
+
+# Function to update persistent peers dynamically
+update_peers() {
+    echo -e "\e[1m\e[32mFetching live peers... \e[0m" && sleep 1
+    PEERS=$(curl -s -X POST https://0gchain.josephtran.xyz -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"net_info","params":[],"id":1}' | jq -r '.result.peers[] | select(.connection_status.SendMonitor.Active == true) | "\(.node_info.id)@\(if .node_info.listen_addr | contains("0.0.0.0") then .remote_ip + ":" + (.node_info.listen_addr | sub("tcp://0.0.0.0:"; "")) else .node_info.listen_addr | sub("tcp://"; "") end)"' | tr '\n' ',' | sed 's/,$//' | awk '{print "\"" $0 "\""}')
+
+    if [ -z "$PEERS" ]; then
+        echo -e "\e[1m\e[31mFailed to fetch peers. Using default seeds as persistent peers.\e[0m"
+        PEERS="$SEEDS"
+    fi
+
+    echo -e "\e[1m\e[32mUpdating persistent peers in config.toml... \e[0m" && sleep 1
+    sed -i "s/^persistent_peers *=.*/persistent_peers = $PEERS/" $HOME/.0gchain/config/config.toml
+
+    if [ $? -eq 0 ]; then
+        echo -e "\e[1m\e[32mPersistent peers updated successfully!\e[0m"
+    else
+        echo -e "\e[1m\e[31mFailed to update persistent peers.\e[0m"
+    fi
 }
 
 # Function to restart the node
