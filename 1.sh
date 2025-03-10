@@ -30,8 +30,8 @@ install_node() {
     sudo rm -rf /usr/local/go && \
     sudo tar -C /usr/local -xzf "go$ver.linux-amd64.tar.gz" && \
     rm "go$ver.linux-amd64.tar.gz" && \
-    echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin" >> $HOME/.bashrc && \
-    source $HOME/.bashrc && \
+    echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin" >> $HOME/.bash_profile && \
+    source $HOME/.bash_profile && \
     go version || { echo -e "\e[1m\e[31mGo installation failed. Exiting...\e[0m"; exit 1; }
 
     echo -e "\e[1m\e[32m4. Downloading and building binaries... \e[0m" && sleep 1
