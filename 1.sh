@@ -234,4 +234,5 @@ while true; do
         7) break ;;
         *) echo -e "\e[1m\e[31mInvalid choice. Please try again.\e[0m" ;;
     esac
+    read -rp "Press Enter to return to the main menu..."
 done
