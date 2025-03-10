@@ -10,15 +10,13 @@ open_ports() {
     echo -e "\e[1m\e[32mPorts opened successfully.\e[0m"
 }
 
-#!/bin/bash
-
 # Function to install the node
 install_node() {
     echo -e "\e[1m\e[32m1. Updating packages... \e[0m" && sleep 1
     sudo apt update && sudo apt upgrade -y
 
     echo -e "\e[1m\e[32m2. Installing dependencies... \e[0m" && sleep 1
-    sudo apt install curl tar wget clang pkg-config protobuf-compiler libssl-dev jq build-essential protobuf-compiler bsdmainutils git make ncdu gcc git jq chrony liblz4-tool -y snapd
+    sudo apt install curl tar wget clang pkg-config protobuf-compiler libssl-dev jq build-essential protobuf-compiler bsdmainutils git make ncdu gcc git jq chrony liblz4-tool -y
 
     echo -e "\e[1m\e[32m3. Installing Go... \e[0m" && sleep 1
     cd $HOME && \
@@ -27,18 +25,19 @@ install_node() {
     sudo rm -rf /usr/local/go && \
     sudo tar -C /usr/local -xzf "go$ver.linux-amd64.tar.gz" && \
     rm "go$ver.linux-amd64.tar.gz" && \
-    echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin" >> $HOME/.bash_profile && \
-    source $HOME/.bash_profile && \
+    echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin" >> $HOME/.bashrc && \
+    source $HOME/.bashrc && \
     go version
 
     echo -e "\e[1m\e[32m4. Downloading and building binaries... \e[0m" && sleep 1
     git clone -b v0.2.3 https://github.com/0glabs/0g-chain.git
     cd 0g-chain
-    make install
+    make install || { echo -e "\e[1m\e[31mFailed to build binaries. Exiting...\e[0m"; exit 1; }
     0gchaind version
 
     echo -e "\e[1m\e[32m5. Initializing node... \e[0m" && sleep 1
-    read -p "Enter node name: " MONIKER
+    read -p "Enter node name (default: 0g-node): " MONIKER
+    MONIKER=${MONIKER:-0g-node}
     0gchaind init $MONIKER --chain-id zgtendermint_16600-2
     0gchaind config chain-id zgtendermint_16600-2
     0gchaind config node tcp://localhost:26657
@@ -46,7 +45,7 @@ install_node() {
 
     echo -e "\e[1m\e[32m6. Downloading genesis file... \e[0m" && sleep 1
     rm $HOME/.0gchain/config/genesis.json
-    wget https://github.com/0glabs/0g-chain/releases/download/v0.2.3/genesis.json -O $HOME/.0gchain/config/genesis.json
+    wget https://github.com/0glabs/0g-chain/releases/download/v0.2.3/genesis.json -O $HOME/.0gchain/config/genesis.json || { echo -e "\e[1m\e[31mFailed to download genesis file. Exiting...\e[0m"; exit 1; }
 
     echo -e "\e[1m\e[32m7. Configuring seeds... \e[0m" && sleep 1
     SEEDS="81987895a11f6689ada254c6b57932ab7ed909b6@54.241.167.190:26656,010fb4de28667725a4fef26cdc7f9452cc34b16d@54.176.175.48:26656,e9b4bc203197b62cc7e6a80a64742e752f4210d5@54.193.250.204:26656,68b9145889e7576b652ca68d985826abd46ad660@18.166.164.232:26656"
@@ -62,7 +61,11 @@ install_node() {
     echo -e "\e[1m\e[32m10. Setting minimum gas price... \e[0m" && sleep 1
     sed -i "s/^minimum-gas-prices *=.*/minimum-gas-prices = \"0ua0gi\"/" $HOME/.0gchain/config/app.toml
 
-    echo -e "\e[1m\e[32m12. Creating service... \e[0m" && sleep 1
+    echo -e "\e[1m\e[32m11. Creating service... \e[0m" && sleep 1
+    if ! command -v 0gchaind &> /dev/null; then
+        echo -e "\e[1m\e[31m0gchaind binary not found. Exiting...\e[0m"
+        exit 1
+    fi
     sudo tee /etc/systemd/system/0gd.service > /dev/null <<EOF
 [Unit]
 Description=0G Node
@@ -79,7 +82,7 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
 
-    echo -e "\e[1m\e[32m13. Starting service... \e[0m" && sleep 1
+    echo -e "\e[1m\e[32m12. Starting service... \e[0m" && sleep 1
     sudo systemctl daemon-reload
     sudo systemctl enable 0gd
     sudo systemctl start 0gd
@@ -90,7 +93,7 @@ EOF
 # Function to update persistent peers dynamically
 update_peers() {
     echo -e "\e[1m\e[32mFetching live peers... \e[0m" && sleep 1
-    PEERS=$(curl -s -X POST https://16600.rpc.thirdweb.com -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"net_info","params":[],"id":1}' | jq -r '.result.peers[] | select(.connection_status.SendMonitor.Active == true) | "\(.node_info.id)@\(if .node_info.listen_addr | contains("0.0.0.0") then .remote_ip + ":" + (.node_info.listen_addr | sub("tcp://0.0.0.0:"; "")) else .node_info.listen_addr | sub("tcp://"; "") end)"' | tr '\n' ',' | sed 's/,$//' | awk '{print "\"" $0 "\""}')
+    PEERS=$(curl -s -X POST https://16600.rpc.thirdweb.com -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"net_info","params":[],"id":1}' | jq -r '.result.peers[] | select(.connection_status.SendMonitor.Active == true) | "\(.node_info.id)@\(if .node_info.listen_addr | contains("0.0.0.0") then .remote_ip + ":" + (.node_info.listen_addr | sub("tcp://0.0.0.0:"; "")) else .node_info.listen_addr | sub("tcp://"; "") end)"' | tr '\n' ',' | sed 's/,$//' | awk '{print "\"" $0 "\""}') || PEERS="$SEEDS"
 
     if [ -z "$PEERS" ]; then
         echo -e "\e[1m\e[31mFailed to fetch peers. Using default seeds as persistent peers.\e[0m"
