@@ -233,7 +233,7 @@ while true; do
         7) check_peers_and_status ;;
         6) monitor_logs ;;
         9) update_peers
-        0) break ;;
+        0) break
         *) echo -e "\e[1m\e[31mInvalid choice. Please try again.\e[0m" ;;
     esac
     read -rp "Press Enter to return to the main menu..."
