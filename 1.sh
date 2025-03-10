@@ -21,16 +21,22 @@ install_node() {
     echo -e "\e[1m\e[32m3. Installing Go... \e[0m" && sleep 1
     cd $HOME && \
     ver="1.22.0" && \
-    wget "https://golang.org/dl/go$ver.linux-amd64.tar.gz" && \
+    wget "https://golang.org/dl/go$ver.linux-amd64.tar.gz" || { echo -e "\e[1m\e[31mFailed to download Go. Exiting...\e[0m"; exit 1; }
+    if ! tar -tzf "go$ver.linux-amd64.tar.gz" > /dev/null; then
+        echo -e "\e[1m\e[31mDownloaded Go archive is corrupted. Exiting...\e[0m"
+        rm "go$ver.linux-amd64.tar.gz"
+        exit 1
+    fi
     sudo rm -rf /usr/local/go && \
     sudo tar -C /usr/local -xzf "go$ver.linux-amd64.tar.gz" && \
     rm "go$ver.linux-amd64.tar.gz" && \
     echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin" >> $HOME/.bashrc && \
     source $HOME/.bashrc && \
-    go version
+    go version || { echo -e "\e[1m\e[31mGo installation failed. Exiting...\e[0m"; exit 1; }
 
     echo -e "\e[1m\e[32m4. Downloading and building binaries... \e[0m" && sleep 1
-    git clone -b v0.2.3 https://github.com/0glabs/0g-chain.git
+    rm -rf 0g-chain
+    git clone -b v0.2.3 https://github.com/0glabs/0g-chain.git || { echo -e "\e[1m\e[31mFailed to clone repository. Exiting...\e[0m"; exit 1; }
     cd 0g-chain
     make install || { echo -e "\e[1m\e[31mFailed to build binaries. Exiting...\e[0m"; exit 1; }
     0gchaind version
@@ -93,7 +99,7 @@ EOF
 # Function to update persistent peers dynamically
 update_peers() {
     echo -e "\e[1m\e[32mFetching live peers... \e[0m" && sleep 1
-    PEERS=$(curl -s -X POST https://0gchain.josephtran.xyz -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"net_info","params":[],"id":1}' | jq -r '.result.peers[] | select(.connection_status.SendMonitor.Active == true) | "\(.node_info.id)@\(if .node_info.listen_addr | contains("0.0.0.0") then .remote_ip + ":" + (.node_info.listen_addr | sub("tcp://0.0.0.0:"; "")) else .node_info.listen_addr | sub("tcp://"; "") end)"' | tr '\n' ',' | sed 's/,$//' | awk '{print "\"" $0 "\""}') || PEERS="$SEEDS"
+    PEERS=$(curl -s -X POST https://16600.rpc.thirdweb.com -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"net_info","params":[],"id":1}' | jq -r '.result.peers[] | select(.connection_status.SendMonitor.Active == true) | "\(.node_info.id)@\(if .node_info.listen_addr | contains("0.0.0.0") then .remote_ip + ":" + (.node_info.listen_addr | sub("tcp://0.0.0.0:"; "")) else .node_info.listen_addr | sub("tcp://"; "") end)"' | tr '\n' ',' | sed 's/,$//' | awk '{print "\"" $0 "\""}') || PEERS="$SEEDS"
 
     if [ -z "$PEERS" ]; then
         echo -e "\e[1m\e[31mFailed to fetch peers. Using default seeds as persistent peers.\e[0m"
