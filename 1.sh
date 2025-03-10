@@ -62,9 +62,6 @@ install_node() {
     echo -e "\e[1m\e[32m10. Setting minimum gas price... \e[0m" && sleep 1
     sed -i "s/^minimum-gas-prices *=.*/minimum-gas-prices = \"0ua0gi\"/" $HOME/.0gchain/config/app.toml
 
-    echo -e "\e[1m\e[32m11. Configuring firewall... \e[0m" && sleep 1
-    configure_firewall
-
     echo -e "\e[1m\e[32m12. Creating service... \e[0m" && sleep 1
     sudo tee /etc/systemd/system/0gd.service > /dev/null <<EOF
 [Unit]
@@ -93,7 +90,7 @@ EOF
 # Function to update persistent peers dynamically
 update_peers() {
     echo -e "\e[1m\e[32mFetching live peers... \e[0m" && sleep 1
-    PEERS=$(curl -s -X POST https://0gchain.josephtran.xyz -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"net_info","params":[],"id":1}' | jq -r '.result.peers[] | select(.connection_status.SendMonitor.Active == true) | "\(.node_info.id)@\(if .node_info.listen_addr | contains("0.0.0.0") then .remote_ip + ":" + (.node_info.listen_addr | sub("tcp://0.0.0.0:"; "")) else .node_info.listen_addr | sub("tcp://"; "") end)"' | tr '\n' ',' | sed 's/,$//' | awk '{print "\"" $0 "\""}')
+    PEERS=$(curl -s -X POST https://16600.rpc.thirdweb.com -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"net_info","params":[],"id":1}' | jq -r '.result.peers[] | select(.connection_status.SendMonitor.Active == true) | "\(.node_info.id)@\(if .node_info.listen_addr | contains("0.0.0.0") then .remote_ip + ":" + (.node_info.listen_addr | sub("tcp://0.0.0.0:"; "")) else .node_info.listen_addr | sub("tcp://"; "") end)"' | tr '\n' ',' | sed 's/,$//' | awk '{print "\"" $0 "\""}')
 
     if [ -z "$PEERS" ]; then
         echo -e "\e[1m\e[31mFailed to fetch peers. Using default seeds as persistent peers.\e[0m"
@@ -108,15 +105,6 @@ update_peers() {
     else
         echo -e "\e[1m\e[31mFailed to update persistent peers.\e[0m"
     fi
-}
-
-# Function to configure firewall
-configure_firewall() {
-    echo -e "\e[1m\e[32mConfiguring firewall to allow port 26656... \e[0m" && sleep 1
-    sudo ufw allow 26656/tcp
-    sudo ufw enable
-    sudo ufw reload
-    echo -e "\e[1m\e[32mFirewall configured!\e[0m"
 }
 
 # Function to monitor logs
