@@ -219,6 +219,8 @@ while true; do
     echo "================================================="
     echo "10. Uninstall Node"
     echo "================================================="
+    echo "0. EXIT"
+    echo "================================================="
     read -p "Enter your choice: " CHOICE
 
     case $CHOICE in
@@ -231,7 +233,7 @@ while true; do
         7) check_peers_and_status ;;
         6) monitor_logs ;;
         9) update_peers
-        7) break ;;
+        0) break ;;
         *) echo -e "\e[1m\e[31mInvalid choice. Please try again.\e[0m" ;;
     esac
     read -rp "Press Enter to return to the main menu..."
