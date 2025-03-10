@@ -10,13 +10,7 @@ open_ports() {
     echo -e "\e[1m\e[32mPorts opened successfully.\e[0m"
 }
 
-# Function to increase connection limits
-increase_connection_limits() {
-    echo -e "\e[1m\e[32mIncreasing connection limits...\e[0m"
-    sed -i 's/^max_num_inbound_peers *=.*/max_num_inbound_peers = 100/' $HOME/.0gchain/config/config.toml
-    sed -i 's/^max_num_outbound_peers *=.*/max_num_outbound_peers = 100/' $HOME/.0gchain/config/config.toml
-    echo -e "\e[1m\e[32mConnection limits increased successfully.\e[0m"
-}
+#!/bin/bash
 
 # Function to install the node
 install_node() {
@@ -61,10 +55,17 @@ install_node() {
     echo -e "\e[1m\e[32m8. Updating persistent peers dynamically... \e[0m" && sleep 1
     update_peers
 
-    echo -e "\e[1m\e[32m9. Setting minimum gas price... \e[0m" && sleep 1
+    echo -e "\e[1m\e[32m9. Increasing peer limits... \e[0m" && sleep 1
+    sed -i 's/^max_num_inbound_peers *=.*/max_num_inbound_peers = 100/' $HOME/.0gchain/config/config.toml
+    sed -i 's/^max_num_outbound_peers *=.*/max_num_outbound_peers = 100/' $HOME/.0gchain/config/config.toml
+
+    echo -e "\e[1m\e[32m10. Setting minimum gas price... \e[0m" && sleep 1
     sed -i "s/^minimum-gas-prices *=.*/minimum-gas-prices = \"0ua0gi\"/" $HOME/.0gchain/config/app.toml
 
-    echo -e "\e[1m\e[32m10. Creating service... \e[0m" && sleep 1
+    echo -e "\e[1m\e[32m11. Configuring firewall... \e[0m" && sleep 1
+    configure_firewall
+
+    echo -e "\e[1m\e[32m12. Creating service... \e[0m" && sleep 1
     sudo tee /etc/systemd/system/0gd.service > /dev/null <<EOF
 [Unit]
 Description=0G Node
@@ -81,7 +82,7 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
 
-    echo -e "\e[1m\e[32m11. Starting service... \e[0m" && sleep 1
+    echo -e "\e[1m\e[32m13. Starting service... \e[0m" && sleep 1
     sudo systemctl daemon-reload
     sudo systemctl enable 0gd
     sudo systemctl start 0gd
@@ -107,6 +108,21 @@ update_peers() {
     else
         echo -e "\e[1m\e[31mFailed to update persistent peers.\e[0m"
     fi
+}
+
+# Function to configure firewall
+configure_firewall() {
+    echo -e "\e[1m\e[32mConfiguring firewall to allow port 26656... \e[0m" && sleep 1
+    sudo ufw allow 26656/tcp
+    sudo ufw enable
+    sudo ufw reload
+    echo -e "\e[1m\e[32mFirewall configured!\e[0m"
+}
+
+# Function to monitor logs
+monitor_logs() {
+    echo -e "\e[1m\e[32mMonitoring node logs... \e[0m" && sleep 1
+    journalctl -u 0gd -f
 }
 
 # Function to restart the node
@@ -177,8 +193,8 @@ while true; do
     echo "4. Uninstall Node"
     echo "5. Check Node Status"
     echo "6. Setup Validator"
-    echo "7. Exit"
-    echo "6. Update Peers"
+    echo "8. Update Peers"
+    echo "9. Monitor Logs"
     echo "================================================="
     read -p "Enter your choice: " CHOICE
 
@@ -190,6 +206,7 @@ while true; do
         5) check_status ;;
         6) setup_validator ;;
         8) update_peers ;;
+        9) monitor_logs ;;
         7) break ;;
         *) echo -e "\e[1m\e[31mInvalid choice. Please try again.\e[0m" ;;
     esac
