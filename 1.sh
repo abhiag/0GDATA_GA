@@ -156,6 +156,26 @@ check_status() {
     sudo systemctl status 0gd --no-pager
 }
 
+check_peers_and_status() {
+    echo -e "\e[1m\e[32mChecking connected peers and log sync height...\e[0m"
+    echo -e "\e[1m\e[32mPress Ctrl+C to exit.\e[0m"
+
+    while true; do
+        # Send JSON-RPC request to the node
+        response=$(curl -s -X POST http://localhost:5678 -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"zgs_getStatus","params":[],"id":1}')
+
+        # Extract logSyncHeight and connectedPeers from the response
+        logSyncHeight=$(echo "$response" | jq -r '.result.logSyncHeight')
+        connectedPeers=$(echo "$response" | jq -r '.result.connectedPeers')
+
+        # Display the results with colored output
+        echo -e "logSyncHeight: \033[32m$logSyncHeight\033[0m, connectedPeers: \033[34m$connectedPeers\033[0m"
+
+        # Wait for 5 seconds before the next check
+        sleep 5
+    done
+}
+
 # Function to setup validator
 setup_validator() {
     echo -e "\e[1m\e[32mSetting up validator...\e[0m"
@@ -190,11 +210,14 @@ while true; do
     echo "1. Install Node"
     echo "2. Restart Node"
     echo "3. Stop Node"
-    echo "4. Uninstall Node"
     echo "5. Check Node Status"
-    echo "6. Setup Validator"
-    echo "8. Update Peers"
-    echo "9. Monitor Logs"
+    echo "6. Monitor Node Logs"
+    echo "7. Check Peers Status"
+    echo "================================================="
+    echo "8. Setup Your Node As Validator"
+    echo "9. Update Peers"
+    echo "================================================="
+    echo "10. Uninstall Node"
     echo "================================================="
     read -p "Enter your choice: " CHOICE
 
@@ -202,11 +225,12 @@ while true; do
         1) install_node ;;
         2) restart_node ;;
         3) stop_node ;;
-        4) uninstall_node ;;
+        10) uninstall_node ;;
         5) check_status ;;
-        6) setup_validator ;;
-        8) update_peers ;;
-        9) monitor_logs ;;
+        8) setup_validator ;;
+        7) check_peers_and_status ;;
+        6) monitor_logs ;;
+        9) update_peers
         7) break ;;
         *) echo -e "\e[1m\e[31mInvalid choice. Please try again.\e[0m" ;;
     esac
