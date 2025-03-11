@@ -153,24 +153,39 @@ check_status() {
     sudo systemctl status 0gd --no-pager
 }
 
-check_peers_and_status() {
-    echo -e "\e[1m\e[32mChecking connected peers and log sync height...\e[0m"
-    echo -e "\e[1m\e[32mPress Ctrl+C to exit.\e[0m"
+check_Sync_status() {
+  while true; do
+    # Get local block height
+    local_height=$(0gchaind status --home string 2>/dev/null | jq -r .sync_info.latest_block_height)
+    if [ -z "$local_height" ]; then
+      echo -e "\033[1;31mError: Unable to fetch local block height. Is the node running?\033[0m"
+      sleep 5
+      continue
+    fi
 
-    while true; do
-        # Send JSON-RPC request to the node
-        response=$(curl -s -X POST http://localhost:5678 -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"zgs_getStatus","params":[],"id":1}')
+    # Get network block height
+    network_height=$(curl -s https://0gchain.josephtran.xyz/status 2>/dev/null | jq -r '.result.sync_info.latest_block_height')
+    if [ -z "$network_height" ]; then
+      echo -e "\033[1;31mError: Unable to fetch network block height. Check the URL or your internet connection.\033[0m"
+      sleep 5
+      continue
+    fi
 
-        # Extract logSyncHeight and connectedPeers from the response
-        logSyncHeight=$(echo "$response" | jq -r '.result.logSyncHeight')
-        connectedPeers=$(echo "$response" | jq -r '.result.connectedPeers')
+    # Calculate blocks left to sync
+    blocks_left=$((network_height - local_height))
 
-        # Display the results with colored output
-        echo -e "logSyncHeight: \033[32m$logSyncHeight\033[0m, connectedPeers: \033[34m$connectedPeers\033[0m"
+    # Display block heights
+    echo -e "\033[1;38mYour node height:\033[0m \033[1;34m$local_height\033[0m | \033[1;35mNetwork height:\033[0m \033[1;36m$network_height\033[0m | \033[1;29mBlocks left:\033[0m \033[1;31m$blocks_left\033[0m"
 
-        # Wait for 5 seconds before the next check
-        sleep 5
-    done
+    # Exit if fully synced
+    if [ "$blocks_left" -le 0 ]; then
+      echo -e "\033[1;32mYour node is fully synced!\033[0m"
+      break
+    fi
+
+    # Wait before the next check
+    sleep 5
+  done
 }
 
 # Function to setup validator
@@ -209,7 +224,7 @@ while true; do
     echo "3. Stop Node"
     echo "5. Check Node Status"
     echo "6. Monitor Node Logs"
-    echo "7. Check Peers Status"
+    echo "7. Node Sync Status"
     echo "================================================="
     echo "8. Setup Your Node As Validator"
     echo "9. Update Peers"
@@ -227,7 +242,7 @@ while true; do
         10) uninstall_node ;;
         5) check_status ;;
         8) setup_validator ;;
-        7) check_peers_and_status ;;
+        7) check_Sync_status ;;
         6) monitor_logs ;;
         9) update_peers ;;
         0) break ;;
