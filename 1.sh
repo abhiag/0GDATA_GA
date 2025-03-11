@@ -186,6 +186,8 @@ check_Sync_status() {
     # Wait before the next check
     sleep 5
   done
+  # Wait for user to press Enter before returning to main menu
+  read -p "Press Enter to return to the main menu..."
 }
 
 # Function to setup validator
