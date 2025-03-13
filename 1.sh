@@ -214,6 +214,7 @@ setup_validator() {
       --details="$DETAILS" \
       --gas=auto \
       --gas-adjustment=1.4 \
+      --gas-prices 0.00552ua0gi \
       -y
     echo -e "\e[1m\e[32mValidator setup completed!\e[0m"
 }
