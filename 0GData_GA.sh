@@ -1,122 +1,149 @@
-# Update system and install required dependencies
-echo -e "${GREEN}🔄 Updating system packages...${RESET}"
-sudo apt update -y && sudo apt upgrade -y
+#!/bin/bash
 
-echo -e "${GREEN}⚙️ Installing dependencies...${RESET}"
-sudo apt install -y git curl wget docker.io docker-compose build-essential
+# Auto-Handling Bash Script for DA Node and DA Signer Setup
+# Ensure you run this script as a user with sudo privileges
 
-# Install Rust (if not installed)
-if ! command -v cargo &> /dev/null; then
-    echo -e "${GREEN}📦 Installing Rust...${RESET}"
+set -e  # Exit on error
+
+# Variables
+REPO_URL="https://github.com/0glabs/0g-da-node.git"
+DATA_PATH="/data"
+PARAMS_PATH="/params"
+CONFIG_FILE="config.toml"
+DOCKER_IMAGE_NAME="0g-da-node"
+DOCKER_CONTAINER_NAME="0g-da-node"
+GRPC_PORT="34000"
+ETH_RPC_ENDPOINT="https://evmrpc-testnet.0g.ai"
+DA_ENTRANCE_ADDRESS="0x857C0A28A8634614BB2C96039Cf4a20AFF709Aa9"
+START_BLOCK_NUMBER="940000"
+
+# Function to install dependencies
+install_dependencies() {
+    echo "Installing required dependencies..."
+    sudo apt-get update
+    sudo apt-get install -y \
+        git \
+        curl \
+        build-essential \
+        docker.io \
+        docker-compose \
+        cargo
+    echo "Dependencies installed."
+}
+
+# Function to install Rust
+install_rust() {
+    echo "Installing Rust..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    source "$HOME/.cargo/env"
-else
-    echo -e "${GREEN}✅ Rust is already installed.${RESET}"
-fi
+    source $HOME/.cargo/env
+    echo "Rust installed."
+}
 
-# Clone or update 0G DA Node repository
-if [ -d "$HOME/0g-da-node" ]; then
-    echo -e "${GREEN}🔄 Repository already exists. Pulling latest changes...${RESET}"
-    cd "$HOME/0g-da-node"
-    git pull origin main || { echo -e "${RED}❌ Failed to update repository. Exiting.${RESET}"; exit 1; }
-else
-    echo -e "${GREEN}🔽 Cloning 0G DA Node repository...${RESET}"
-    git clone https://github.com/0glabs/0g-da-node.git "$HOME/0g-da-node"
-    cd "$HOME/0g-da-node"
-fi
+# Function to clone the repository
+clone_repo() {
+    echo "Cloning the DA Node repository..."
+    git clone $REPO_URL
+    cd 0g-da-node
+    echo "Repository cloned."
+}
 
-# Generate BLS private key (if not already generated)
-if [ ! -f "bls_key.txt" ]; then
-    echo -e "${GREEN}🔑 Generating BLS Private Key...${RESET}"
-    cargo run --bin key-gen > bls_key.txt 2>/dev/null
-    sleep 2  # Give it a moment to write the file
-fi
+# Function to generate BLS private key
+generate_bls_key() {
+    echo "Generating BLS private key..."
+    cargo run --bin key-gen > bls_key.txt
+    BLS_PRIVATE_KEY=$(grep "Private Key:" bls_key.txt | awk '{print $3}')
+    echo "=============================================="
+    echo "Generated BLS Private Key: $BLS_PRIVATE_KEY"
+    echo "=============================================="
+    echo "Please make a backup of this key. It will not be shown again."
+    echo "=============================================="
+}
 
-# Check if BLS key file exists
-if [ ! -f "bls_key.txt" ]; then
-    echo -e "${RED}❌ Failed to generate BLS Private Key. Exiting.${RESET}"
-    exit 1
-fi
+# Function to prompt for miner_eth_private_key
+get_miner_eth_private_key() {
+    read -p "Enter your Miner ETH Private Key: " MINER_ETH_PRIVATE_KEY
+    if [ -z "$MINER_ETH_PRIVATE_KEY" ]; then
+        echo "Error: Miner ETH Private Key cannot be empty."
+        exit 1
+    fi
+}
 
-# Extract BLS Private Key
-BLS_PRIVATE_KEY=$(cat bls_key.txt | tr -d '\n')
-
-if [[ -z "$BLS_PRIVATE_KEY" ]]; then
-    echo -e "${RED}❌ BLS Private Key extraction failed. Exiting.${RESET}"
-    exit 1
-fi
-
-echo -e "${GREEN}✅ BLS Private Key successfully extracted: $BLS_PRIVATE_KEY${RESET}"
-
-# Prompt user for Ethereum Private Key (used for both Signer & Miner)
-read -p "🔑 Enter your Ethereum Private Key (used for both Signer & Miner): " ETH_PRIVATE_KEY
-
-# Use the same key for both signer and miner
-SIGNER_ETH_KEY="$ETH_PRIVATE_KEY"
-MINER_ETH_KEY="$ETH_PRIVATE_KEY"
-
-echo -e "${GREEN}✅ Using the same key for both Signer & Miner.${RESET}"
-
-# Create config.toml file
-echo -e "${GREEN}📝 Creating config.toml file...${RESET}"
-cat <<EOF > config.toml
+# Function to create config.toml
+create_config() {
+    echo "Creating $CONFIG_FILE..."
+    cat <<EOL > $CONFIG_FILE
 log_level = "info"
-data_path = "/data"
+
+data_path = "$DATA_PATH"
 
 # Path to downloaded params folder
-encoder_params_dir = "/params"
+encoder_params_dir = "$PARAMS_PATH"
 
 # gRPC server listen address
-grpc_listen_address = "0.0.0.0:34000"
+grpc_listen_address = "0.0.0.0:$GRPC_PORT"
 
-# Chain eth rpc endpoint
-eth_rpc_endpoint = "https://evmrpc-testnet.0g.ai"
+# Chain ETH RPC endpoint
+eth_rpc_endpoint = "$ETH_RPC_ENDPOINT"
 
 # Public gRPC service socket address to register in DA contract
-socket_address = "<your_public_ip>:34000"
+socket_address = "$(curl -s ifconfig.me):$GRPC_PORT"
 
-# Data Availability contract info
-da_entrance_address = "0x857C0A28A8634614BB2C96039Cf4a20AFF709Aa9"
-start_block_number = 940000
+# Data availability contract to interact with
+da_entrance_address = "$DA_ENTRANCE_ADDRESS"
 
-# Private keys
+# Deployed block number of DA entrance contract
+start_block_number = $START_BLOCK_NUMBER
+
+# Signer BLS private key
 signer_bls_private_key = "$BLS_PRIVATE_KEY"
-signer_eth_private_key = "$SIGNER_ETH_KEY"
-miner_eth_private_key = "$MINER_ETH_KEY"
 
-# Enable data availability sampling
+# Signer ETH account private key (same as miner_eth_private_key)
+signer_eth_private_key = "$MINER_ETH_PRIVATE_KEY"
+
+# Miner ETH account private key
+miner_eth_private_key = "$MINER_ETH_PRIVATE_KEY"
+
+# Whether to enable data availability sampling
 enable_das = "true"
+EOL
+    echo "$CONFIG_FILE created."
+}
 
-# Prometheus exporter address
-prometheus_exporter_address = "0.0.0.0:9200"
-EOF
+# Function to build and run Docker container
+run_docker() {
+    echo "Building Docker image..."
+    docker build -t $DOCKER_IMAGE_NAME .
 
-echo -e "${GREEN}✅ Configuration file created.${RESET}"
+    echo "Running Docker container..."
+    docker run -d \
+        --name $DOCKER_CONTAINER_NAME \
+        -v $DATA_PATH:/data \
+        -v $PARAMS_PATH:/params \
+        -p $GRPC_PORT:$GRPC_PORT \
+        $DOCKER_IMAGE_NAME
 
-# Read and insert BLS key into config.toml
-BLS_PRIVATE_KEY=$(cat bls_key.txt | tr -d '\n')
-sed -i "s|signer_bls_private_key = \"\"|signer_bls_private_key = \"$BLS_PRIVATE_KEY\"|g" config.toml
-echo "✅ BLS Key successfully added to config.toml!"
+    echo "Docker container is running."
+}
 
-# **Verify that BLS key is correctly inserted**
-if grep -q "signer_bls_private_key = \"$BLS_PRIVATE_KEY\"" config.toml; then
-    echo -e "${GREEN}✅ BLS Private Key successfully written to config.toml.${RESET}"
-else
-    echo -e "${RED}❌ BLS Private Key insertion failed! Exiting.${RESET}"
-    exit 1
-fi
+# Function to verify the node is running
+verify_node() {
+    echo "Verifying the node is running..."
+    docker logs $DOCKER_CONTAINER_NAME --tail 50
+    echo "Node verification complete. Check logs above for any errors."
+}
 
-# Stop and remove existing container (if running)
-if docker ps -a --format '{{.Names}}' | grep -q "0g-da-node"; then
-    echo -e "${GREEN}🛑 Stopping and removing existing container...${RESET}"
-    docker stop 0g-da-node && docker rm 0g-da-node
-fi
+# Main function
+main() {
+    install_dependencies
+    install_rust
+    clone_repo
+    generate_bls_key
+    get_miner_eth_private_key
+    create_config
+    run_docker
+    verify_node
+    echo "DA Node setup completed successfully!"
+}
 
-# Build and start the Docker container
-echo -e "${GREEN}🐳 Building and running the Docker container...${RESET}"
-docker build -t 0g-da-node .
-docker run -d --name 0g-da-node 0g-da-node
-
-# Display success message
-echo -e "${GREEN}🎉 0G DA Node setup complete!${RESET}"
-echo -e "👉 Use 'docker logs -f 0g-da-node' to monitor logs."
+# Execute the script
+main
